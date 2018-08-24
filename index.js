@@ -65,7 +65,6 @@ function callback(req, resp, cb) {
 }
 
 function gotToken(error, token, tokenResp, req, resp) {
-  debugger
   if (!error) {
     console.log(token.access_token)
     resp.writeHead(200, {'Content-Type': 'text/html'})  
