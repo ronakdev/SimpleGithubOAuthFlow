@@ -1,5 +1,5 @@
 const request = require("request");
-const url = require("url");
+const urlParser = require("url");
 const http = require("http");
 const crypto = require("crypto");
 
@@ -16,7 +16,10 @@ let opts = {
 // the various steps within the OAuth flow to ensure
 // the request has not been tampered with.
 const sig = crypto.randomBytes(20).toString("hex");
-const port = 8080;
+const port = 8090;
+let state = {
+  "signature" : sig
+};
 
 function redirect(req, resp, destination) {
   resp.statusCode = 301;
@@ -25,12 +28,9 @@ function redirect(req, resp, destination) {
 }
 
 function login(req, resp) {
-  const state = {
-    reffer: req.url,
-    signature: sig
-  };
+  state.reffer = req.url
 
-  const url =
+  const urlString =
     "https://github.com/login/oauth/authorize" +
     "?client_id=" +
     opts.githubClient +
@@ -39,12 +39,12 @@ function login(req, resp) {
     JSON.stringify(state);
 
   resp.statusCode = 302;
-  resp.setHeader("location", url);
+  resp.setHeader("location", urlString);
   resp.end();
 }
 
 function callback(req, resp) {
-  const query = url.parse(req.url, true).query;
+  const query = urlParser.parse(req.url, true).query;
   const code = query.code;
   if (!code) {
     // Send 400 missing oauth code
@@ -57,10 +57,9 @@ function callback(req, resp) {
     "&client_secret=" +
     opts.githubSecret +
     "&code=" +
-    code +
-    "&state=" +
-    state;
+    code
 
+     console.log (`getting token, code: ${code}, url: ${url}`)
   request.get(
     {
       url: url,
@@ -69,15 +68,18 @@ function callback(req, resp) {
     function(err, tokenResp, body) {
       if (err) {
         // TODO send 500 response
+        resp.writeHead(500, { "Content-Type" : "text/html"})
+        resp.write("<h1>500 Error</h1>")
       } else {
-        const state = JSON.parse(query.state);
-
+        const recievedState = JSON.parse(query.state);
+        const reffer = recievedState.reffer
         // TODO Store DB
 
         resp.writeHead(200, { "Content-Type": "text/html" });
+        resp.write(`<h1>Success!</h1><br/><p>Token Recieved! View API Information <a href='https://api.github.com/user?access_token=${body.access_token}'>here<a></p>`)
 
         // Redirect user back to app
-        resp.setHeader("location", state.reffer);
+        //resp.setHeader("location", state.reffer);
       }
     }
   );
@@ -85,18 +87,20 @@ function callback(req, resp) {
 
 http
   .createServer((req, res) => {
-    console.log(`URL: ${req.url}`);
 
     if (req.url === "/") {
       res.statusCode = 200;
       res.write("alive");
       res.end();
       return;
-    } else if (req.url === "/login/") {
+    } 
+    else if (urlParser.parse(req.url).pathname === "/login") {
       return login(req, res);
-    } else if (url.parse(req.url).pathname === "/callback/") {
+    } 
+    else if (urlParser.parse(req.url).pathname === "/callback") {
       return callback(req, res);
-    } else {
+    } 
+    else {
       res.statusCode = 200;
       res.write(`Request URL ${req.url} does not exist`);
       res.end();
@@ -104,5 +108,5 @@ http
     }
   })
   .listen(port, () => {
-    console.log("Now listening on http://localhost:8080/");
+    console.log(`Now listening on http://localhost:${port}/`);
   });
